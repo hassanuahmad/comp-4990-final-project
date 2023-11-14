@@ -1,6 +1,7 @@
+
 "use client";
-import { useState } from "react";
-import { UserButton } from "@clerk/nextjs";
+import { useState, useEffect } from "react";
+import { UserButton, useUser } from "@clerk/nextjs";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
@@ -16,12 +17,40 @@ import {
 } from "@/components/ui/form";
 import { Textarea } from "@/components/ui/textarea";
 
+
+const Header = () => {
+    const { user } = useUser();
+    const userId = user?.id;
+    
+    return (
+        <header className="bg-gray-50">
+            <div className="mx-auto max-w-screen-xl px-4 py-8 sm:px-6 lg:px-8">
+                <div className="flex items-center justify-end gap-4">
+                    <UserButton afterSignOutUrl="/" />
+                </div>
+
+                <div className="mt-8">
+                    <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl">
+                        Welcome Back, {user ? user.fullName : "Guest"}!
+                    </h1>
+
+                    <p className="mt-1.5 text-sm text-gray-500">
+                        Your website has seen a 52% increase in traffic in the
+                        last month. Keep it up! 🚀
+                    </p>
+                </div>
+            </div>
+        </header>
+    );
+};
+
 const formSchema = z.object({
     bio: z.string(),
 });
 
 export default function Dashboard() {
     const [apiRes, setApiRes] = useState([]);
+    const { user } = useUser();
 
     const form = useForm({
         resolver: zodResolver(formSchema),
@@ -37,7 +66,10 @@ export default function Dashboard() {
                 headers: {
                     "Content-Type": "application/json",
                 },
-                body: JSON.stringify({ userInput: data.bio }),
+                body: JSON.stringify({ 
+                    userInput: data.bio,
+                    userId: user.id,
+                 }),
             });
 
             if (!response.ok) {
@@ -45,7 +77,6 @@ export default function Dashboard() {
             }
 
             const responseData = await response.json();
-            // console.log("responseData", responseData.result.keywords);
             setApiRes(responseData.result.keywords);
         } catch (error) {
             console.error(
@@ -57,25 +88,7 @@ export default function Dashboard() {
 
     return (
         <>
-            <header className="bg-gray-50">
-                <div className="mx-auto max-w-screen-xl px-4 py-8 sm:px-6 lg:px-8">
-                    <div className="flex items-center justify-end gap-4">
-                        <UserButton afterSignOutUrl="/" />
-                    </div>
-
-                    <div className="mt-8">
-                        <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl">
-                            Welcome Back, Barry!
-                        </h1>
-
-                        <p className="mt-1.5 text-sm text-gray-500">
-                            Your website has seen a 52% increase in traffic in
-                            the last month. Keep it up! 🚀
-                        </p>
-                    </div>
-                </div>
-            </header>
-
+            <Header />
             <Form {...form}>
                 <form
                     onSubmit={form.handleSubmit(onSubmit)}

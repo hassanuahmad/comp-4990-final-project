@@ -61,114 +61,124 @@ app.get('/', (req, res) => {
     res.render('index');
   });
   
-  app.post("/submit", (req, res) => {
-      const userInput = req.body.userInput;
-      const userInputEncoded = encodeURIComponent(userInput);
-  
-      //SQL query to insert UserInput and retrieve the inserted ID
-      const sqlQuery = `
-          INSERT INTO dbo.UserInput (inputText, timestamp)
-          OUTPUT INSERTED.id -- Retrieve the inserted ID
-          VALUES (@inputText, GETDATE());
-      `;
-  
-      const sqlParameters = [
-          {
-              name: 'inputText',
-              type: sql.NVarChar,
-              value: userInput,
-          },
-      ];
-  
-      const request = new sql.Request();
-  
-      sqlParameters.forEach((param) => {
-          request.input(param.name, param.type, param.value);
-      });
-  
-      request.query(sqlQuery)
-          .then((result) => {
-              // Check if the result contains the inserted ID
-              if (result.recordset && result.recordset.length > 0) {
-                  const inputID = result.recordset[0].id;
-                  console.log('User input inserted successfully with ID:', inputID);
-  
-                  // Continue with NLP analysis
-                  const analyzeParams = {
-                      text: userInputEncoded,
-                      features: {
-                          emotion: {
-                              document: true // Analyze the entire document for emotion
-                          },
-                          sentiment: {
-                              document: true // Analyze the entire document for sentiment
-                          },
-                          keywords: { // Select and Analyze 10 keywords
-                              emotion: true,
-                              sentiment: true,
-                              limit: 10,
-                          },
-                      },
-                  };
+app.post("/submit", (req, res) => {
+    const userId = req.body.userId;
+    console.log("User ID:", userId);
+    const userInput = req.body.userInput;
+    const userInputEncoded = encodeURIComponent(userInput);
 
-                  let nlpResult;
-  
-                  naturalLanguageUnderstanding
-                      .analyze(analyzeParams)
-                      .then((analysisResults) => {
-                          res.json(analysisResults); //Display NLP Result to Client
-                          nlpResult = JSON.stringify(analysisResults);
-                        
-                          // Insert NLPResponse into the database
-                          const insertNLPResponseQuery = `
-                              INSERT INTO NLPResponse (UserInputID, NLPResult, Timestamp)
-                              VALUES (@userInputID, @nlpResult, GETDATE());
-                          `;
-  
-                          const nlpParameters = [
-                              {
-                                  name: 'userInputID',
-                                  type: sql.Int,
-                                  value: inputID, // ID of UserInput
-                              },
-                              {
-                                  name: 'nlpResult',
-                                  type: sql.NVarChar,
-                                  value: nlpResult,
-                              },
-                          ];
-  
-                          const nlpRequest = new sql.Request();
-  
-                          nlpParameters.forEach((param) => {
-                              nlpRequest.input(param.name, param.type, param.value);
-                          });
-  
-                          nlpRequest.query(insertNLPResponseQuery)
+    // SQL query to insert UserInput and retrieve the inserted ID
+    const sqlInsertUserInput = `
+        INSERT INTO dbo.UserInput (inputText, userId, timestamp)
+        OUTPUT INSERTED.id
+        VALUES (@inputText, @userId, GETDATE());
+    `;
+
+    const sqlParametersUserInput = [
+        {
+            name: 'inputText',
+            type: sql.NVarChar,
+            value: userInput,
+        },
+        {
+            name: 'userId',
+            type: sql.NVarChar(200), 
+            value: userId.toString(),
+        },
+    ];
+
+    const requestUserInput = new sql.Request();
+
+    sqlParametersUserInput.forEach((param) => {
+        requestUserInput.input(param.name, param.type, param.value);
+    });
+
+    requestUserInput.query(sqlInsertUserInput)
+        .then((resultUserInput) => {
+            if (resultUserInput.recordset && resultUserInput.recordset.length > 0) {
+                const inputID = resultUserInput.recordset[0].id;
+                console.log('User input inserted successfully with ID:', inputID);
+                
+                // Continue with NLP analysis
+
+                const analyzeParams = {
+                    text: userInputEncoded,
+                    features: {
+                        emotion: {
+                            document: true // Analyze the entire document for emotion
+                        },
+                        sentiment: {
+                            document: true // Analyze the entire document for sentiment
+                        },
+                        keywords: { // Select and Analyze 10 keywords
+                            emotion: true,
+                            sentiment: true,
+                            limit: 10,
+                        },
+                    },
+                };
+
+                let nlpResult;
+
+                naturalLanguageUnderstanding
+                    .analyze(analyzeParams)
+                    .then((analysisResults) => {
+                        res.json(analysisResults); // Display NLP Result to Client
+                        nlpResult = JSON.stringify(analysisResults);
+
+                        // Insert NLPResponse into the database
+                        const insertNLPResponseQuery = `
+                            INSERT INTO NLPResponse (UserInputID, NLPResult, userId, Timestamp)
+                            VALUES (@userInputID, @nlpResult, @userId, GETDATE());
+                        `;
+
+                        const nlpParameters = [
+                            {
+                                name: 'userInputID',
+                                type: sql.Int,
+                                value: inputID, // ID of UserInput
+                            },
+                            {
+                                name: 'nlpResult',
+                                type: sql.NVarChar,
+                                value: nlpResult,
+                            },
+                            {
+                                name: 'userId',
+                                type: sql.NVarChar(200), 
+                                value: userId.toString(),
+                            },
+                        ];
+
+                        const nlpRequest = new sql.Request();
+
+                        nlpParameters.forEach((param) => {
+                            nlpRequest.input(param.name, param.type, param.value);
+                        });
+
+                        nlpRequest.query(insertNLPResponseQuery)
                             .then(() => {
-                            console.log('NLP response inserted successfully');
-                              })
-                              .catch((nlpError) => {
-                                  console.log('NLP response insertion error:', nlpError);
-                                  res.status(500).send('An error occurred during NLP response insertion.');
-                              });
-                      })
-                      
-
-                      .catch((analysisError) => {
-                          console.log('Error during analysis:', analysisError);
-                          res.status(500).send('An error occurred during analysis.');
-                      });
-              } else {
-                  console.log('No UserInput records found in the result.recordset');
-                  res.status(500).send('No UserInput records found for NLP response insertion.');
-              }
-          })
-          .catch((dbError) => {
-              console.log('Database insertion error:', dbError);
-              res.status(500).send('An error occurred during database insertion.');
-          });
-  });
+                                console.log('NLP response inserted successfully');
+                            })
+                            .catch((nlpError) => {
+                                console.log('NLP response insertion error:', nlpError);
+                                res.status(500).send('An error occurred during NLP response insertion.');
+                            });
+                    })
+                    .catch((analysisError) => {
+                        console.log('Error during analysis:', analysisError);
+                        res.status(500).send('An error occurred during analysis.');
+                    });
+            } else {
+                console.log('No UserInput records found in the resultUserInput.recordset');
+                res.status(500).send('No UserInput records found for NLP response insertion.');
+            }
+        })
+        .catch((dbErrorUserInput) => {
+            console.log('Database insertion error for UserInput:', dbErrorUserInput);
+            res.status(500).send('An error occurred during UserInput database insertion.');
+        });
+});
 
   app.listen(port, () => {
     console.log(`Server running at http://localhost:${port}`);
