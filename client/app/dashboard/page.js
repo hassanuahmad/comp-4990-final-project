@@ -37,7 +37,10 @@ import { Pie } from "react-chartjs-2";
 import "chart.js/auto";
 
 const formSchema = z.object({
-    bio: z.string(),
+    inputTextEmote: z
+        .string()
+        .min(15, { message: "Must be at least 20 characters" })
+        .max(1000, { message: "Must be less than 1000 characters" }),
 });
 
 export default function Dashboard() {
@@ -112,7 +115,7 @@ export default function Dashboard() {
                     "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
-                    userInput: data.bio,
+                    userInput: data.inputTextEmote,
                     userId: user.id,
                 }),
             });
@@ -275,7 +278,7 @@ export default function Dashboard() {
                         >
                             <FormField
                                 control={form.control}
-                                name="bio"
+                                name="inputTextEmote"
                                 render={({ field }) => (
                                     <FormItem>
                                         <FormControl>
