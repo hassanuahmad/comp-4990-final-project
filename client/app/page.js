@@ -6,7 +6,7 @@ export default function Home() {
         <div className="flex flex-col lg:flex-row h-screen">
             <div className="w-full lg:w-[60vw] p-8 lg:bg-green-100 flex flex-col">
                 <div className="flex justify-center lg:justify-start">
-                    <Image src={Logo} alt="" width={200} height={200} />
+                    <Image src={Logo} alt="" width={350} height={350} />
                 </div>
 
                 <div className="flex-1 flex justify-start items-center pt-96 lg:pt-0">

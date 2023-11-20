@@ -1,5 +1,6 @@
 import "@/app/globals.css";
 import { ClerkProvider } from "@clerk/nextjs";
+import { Toaster } from "@/components/ui/toaster";
 
 export const metadata = {
     title: "TextEmote",
@@ -10,7 +11,10 @@ export default function RootLayout({ children }) {
     return (
         <ClerkProvider>
             <html lang="en">
-                <body>{children}</body>
+                <body>
+                    {children}
+                    <Toaster />
+                </body>
             </html>
         </ClerkProvider>
     );

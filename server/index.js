@@ -61,20 +61,85 @@ app.get("/", (req, res) => {
     res.render("index");
 });
 
+// app.post("/submit", async (req, res) => {
+//     try {
+//         const userId = req.body.userId;
+//         const userInput = req.body.userInput;
+//         const userInputEncoded = encodeURIComponent(userInput);
+
+//         // Insert UserInput into the database
+//         const inputID = await insertUserInput(userInput, userId);
+
+//         if (inputID) {
+//             // Perform NLP analysis
+//             const analysisResults = await performNLPAnalysis(userInputEncoded);
+
+//             console.log('analysisResults', analysisResults);
+
+//             if (analysisResults) {
+//                 const nlpResult = JSON.stringify(analysisResults);
+
+//                 // Insert NLPResponse into the database
+//                 const responseID = await insertNLPResponse(
+//                     inputID,
+//                     nlpResult,
+//                     userId
+//                 );
+
+//                 if (responseID) {
+//                     // Insert emotion data into DocumentEmotion table
+//                     const emotionData =
+//                         analysisResults.result.emotion.document.emotion;
+//                     await insertEmotionData(responseID, emotionData);
+
+//                     // Insert sentiment data into DocumentSentiment table
+//                     const sentimentData =
+//                         analysisResults.result.sentiment.document;
+//                     await insertSentimentData(responseID, sentimentData);
+
+//                     // Insert keyword analysis into KeywordAnalysis table
+//                     const keywordData = analysisResults.result.keywords;
+//                     await insertKeywordAnalysis(responseID, keywordData);
+
+//                     res.json({ inputID, analysisResults });
+//                 } else {
+//                     console.error(
+//                         "An error occurred during NLP response insertion."
+//                     );
+//                     res.status(500).send(
+//                         "An error occurred during NLP response insertion."
+//                     );
+//                 }
+//             } else {
+//                 console.error("An error occurred NLP analysis.");
+//                 res.status(500).send("An error occurred during NLP analysis.");
+//             }
+//         } else {
+//             console.error("An error occurred during UserInput insertion.");
+//             res.status(500).send(
+//                 "An error occurred during UserInput insertion."
+//             );
+//         }
+//     } catch (error) {
+//         console.error("Unhandled error:", error);
+//         res.status(500).send("An unexpected error occurred.");
+//     }
+// });
+
 app.post("/submit", async (req, res) => {
     try {
         const userId = req.body.userId;
         const userInput = req.body.userInput;
         const userInputEncoded = encodeURIComponent(userInput);
 
-        // Insert UserInput into the database
-        const inputID = await insertUserInput(userInput, userId);
+        // Perform NLP analysis
+        const analysisResults = await performNLPAnalysis(userInputEncoded);
 
-        if (inputID) {
-            // Perform NLP analysis
-            const analysisResults = await performNLPAnalysis(userInputEncoded);
+        if (analysisResults && analysisResults.result) {
+            // Insert UserInput into the database
+            const inputID = await insertUserInput(userInput, userId);
 
-            if (analysisResults) {
+            if (inputID) {
                 const nlpResult = JSON.stringify(analysisResults);
 
                 // Insert NLPResponse into the database
@@ -85,20 +150,7 @@ app.post("/submit", async (req, res) => {
                 );
 
                 if (responseID) {
-                    // Insert emotion data into DocumentEmotion table
-                    const emotionData =
-                        analysisResults.result.emotion.document.emotion;
-                    await insertEmotionData(responseID, emotionData);
-
-                    // Insert sentiment data into DocumentSentiment table
-                    const sentimentData =
-                        analysisResults.result.sentiment.document;
-                    await insertSentimentData(responseID, sentimentData);
-
-                    // Insert keyword analysis into KeywordAnalysis table
-                    const keywordData = analysisResults.result.keywords;
-                    await insertKeywordAnalysis(responseID, keywordData);
-
+                    // Additional database operations...
                     res.json({ inputID, analysisResults });
                 } else {
                     console.error(
@@ -109,14 +161,14 @@ app.post("/submit", async (req, res) => {
                     );
                 }
             } else {
-                console.error("An error occurred NLP analysis.");
-                res.status(500).send("An error occurred during NLP analysis.");
+                console.error("An error occurred during UserInput insertion.");
+                res.status(500).send(
+                    "An error occurred during UserInput insertion."
+                );
             }
         } else {
-            console.error("An error occurred during UserInput insertion.");
-            res.status(500).send(
-                "An error occurred during UserInput insertion."
-            );
+            console.error("NLP analysis result is null.");
+            res.status(500).send("NLP analysis failed to provide a result.");
         }
     } catch (error) {
         console.error("Unhandled error:", error);
@@ -414,6 +466,62 @@ app.get("/user-input/:id", async (req, res) => {
     } catch (error) {
         console.error("Error fetching input details:", error);
         res.status(500).send("Error fetching input details.");
+    }
+});
+
+app.get("/user-inputs-range/:userId", async (req, res) => {
+    const { userId } = req.params;
+    const { startDate, endDate } = req.query;
+
+    try {
+        const sqlQuery = `
+            SELECT UserInput.*, NLPResponse.NLPResult
+            FROM UserInput
+            LEFT JOIN NLPResponse ON UserInput.id = NLPResponse.UserInputID
+            WHERE UserInput.userId = @userId AND UserInput.timestamp BETWEEN @startDate AND @endDate;
+        `;
+
+        const request = new sql.Request();
+        request.input("userId", sql.NVarChar, userId);
+        request.input("startDate", sql.DateTime, new Date(startDate));
+        request.input("endDate", sql.DateTime, new Date(endDate));
+
+        const result = await request.query(sqlQuery);
+        res.json(result.recordset);
+    } catch (error) {
+        console.error("Error fetching user inputs and NLP responses:", error);
+        res.status(500).send("Error fetching user inputs and NLP responses.");
+    }
+});
+
+app.delete("/user-input/:id", async (req, res) => {
+    const inputID = req.params.id;
+
+    try {
+        const sqlQuery = `
+            DELETE FROM UserInput
+            WHERE id = @inputID;
+        `;
+
+        const request = new sql.Request();
+        request.input("inputID", sql.Int, inputID);
+
+        const result = await request.query(sqlQuery);
+
+        if (result.rowsAffected[0] > 0) {
+            console.log("User input deleted successfully");
+            res.status(200).send({
+                message: "User input deleted successfully",
+            });
+        } else {
+            console.log("User input not found or already deleted");
+            res.status(404).send({
+                message: "User input not found or already deleted",
+            });
+        }
+    } catch (error) {
+        console.error("Error deleting user input:", error);
+        res.status(500).send({ message: "Error deleting user input" });
     }
 });
 

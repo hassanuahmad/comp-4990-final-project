@@ -1,26 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
-import { UserButton, useUser } from "@clerk/nextjs";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
-import * as z from "zod";
 import { Button } from "@/components/ui/button";
-import {
-    Form,
-    FormControl,
-    FormField,
-    FormItem,
-    FormMessage,
-} from "@/components/ui/form";
-import { Textarea } from "@/components/ui/textarea";
-import { Bars3Icon } from "@heroicons/react/24/outline";
-import {
-    Sheet,
-    SheetContent,
-    SheetHeader,
-    SheetTitle,
-    SheetTrigger,
-} from "@/components/ui/sheet";
 import {
     Card,
     CardContent,
@@ -29,12 +8,39 @@ import {
     CardTitle,
 } from "@/components/ui/card";
 import {
-    FaceSmileIcon,
+    Form,
+    FormControl,
+    FormField,
+    FormItem,
+    FormMessage,
+} from "@/components/ui/form";
+import {
+    Sheet,
+    SheetContent,
+    SheetHeader,
+    SheetTitle,
+    SheetTrigger,
+} from "@/components/ui/sheet";
+import { Textarea } from "@/components/ui/textarea";
+import { UserButton, useUser } from "@clerk/nextjs";
+import {
+    Bars3Icon,
     FaceFrownIcon,
+    FaceSmileIcon,
     StopCircleIcon,
+    TrashIcon,
 } from "@heroicons/react/24/outline";
-import { Pie } from "react-chartjs-2";
+import { zodResolver } from "@hookform/resolvers/zod";
 import "chart.js/auto";
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { Pie } from "react-chartjs-2";
+import { useForm } from "react-hook-form";
+import * as z from "zod";
+import Logo from "@/public/logo.png";
+import Image from "next/image";
+import { set } from "date-fns";
+import { useToast } from "@/components/ui/use-toast";
 
 const formSchema = z.object({
     inputTextEmote: z
@@ -53,6 +59,8 @@ export default function Dashboard() {
     const [isHistorySheetOpen, setIsHistorySheetOpen] = useState(false);
     const [userInputs, setUserInputs] = useState([]);
     const [inputText, setInputText] = useState("");
+    const [isLoading, setIsLoading] = useState(false);
+    const { toast } = useToast();
 
     useEffect(() => {
         fetchAllUserInputs();
@@ -96,6 +104,20 @@ export default function Dashboard() {
         }
     };
 
+    const handleDeleteInput = async (inputID) => {
+        try {
+            await fetch(`http://localhost:3001/user-input/${inputID}`, {
+                method: "DELETE",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+            });
+            fetchAllUserInputs();
+        } catch (error) {
+            console.error("Error deleting user input:", error);
+        }
+    };
+
     const toggleHistorySheet = () => {
         setIsHistorySheetOpen(!isHistorySheetOpen);
     };
@@ -108,6 +130,7 @@ export default function Dashboard() {
     });
 
     async function onSubmit(data) {
+        setIsLoading(true);
         try {
             const response = await fetch("http://localhost:3001/submit", {
                 method: "POST",
@@ -121,7 +144,12 @@ export default function Dashboard() {
             });
 
             if (!response.ok) {
-                throw new Error("Network response was not ok");
+                toast({
+                    variant: "destructive",
+                    title: "Uh oh! Something went wrong.",
+                    description:
+                        "There was a problem with your request. Please enter the text again and make sure its proper English.",
+                });
             }
 
             const responseData = await response.json();
@@ -137,6 +165,8 @@ export default function Dashboard() {
                 "There was a problem with the fetch operation:",
                 error.message
             );
+        } finally {
+            setIsLoading(false);
         }
     }
 
@@ -152,18 +182,18 @@ export default function Dashboard() {
                 label: "Emotions",
                 data: Object.values(emotionData || {}),
                 backgroundColor: [
-                    "rgba(255, 99, 132, 0.6)", // Pink for sadness
-                    "rgba(54, 162, 235, 0.6)", // Blue for joy
-                    "rgba(255, 206, 86, 0.6)", // Yellow for fear
-                    "rgba(75, 192, 192, 0.6)", // Green for disgust
-                    "rgba(153, 102, 255, 0.6)", // Purple for anger
+                    "#4f72e3", // Steel Blue for Sadness
+                    "#f7ef54", // Gold for Joy
+                    "#b890de", // Medium Purple for Fear
+                    "#83d479", // Olive Drab for Disgust
+                    "#e8727c", // Indian Red for Anger
                 ],
                 borderColor: [
-                    "rgba(255, 99, 132, 1)",
-                    "rgba(54, 162, 235, 1)",
-                    "rgba(255, 206, 86, 1)",
-                    "rgba(75, 192, 192, 1)",
-                    "rgba(153, 102, 255, 1)",
+                    "#4f72e3", // Steel Blue for Sadness
+                    "#f7ef54", // Gold for Joy
+                    "#b890de", // Medium Purple for Fear
+                    "#83d479", // Olive Drab for Disgust
+                    "#e8727c", // Indian Red for Anger
                 ],
                 borderWidth: 1,
             },
@@ -179,15 +209,15 @@ export default function Dashboard() {
     const getEmotionColor = (emotion) => {
         switch (emotion) {
             case "sadness":
-                return "text-pink-600";
-            case "joy":
                 return "text-blue-600";
+            case "joy":
+                return "text-yellow-300";
             case "fear":
-                return "text-yellow-600";
+                return "text-purple-500";
             case "disgust":
-                return "text-green-600";
+                return "text-green-500";
             case "anger":
-                return "text-purple-600";
+                return "text-red-500";
             default:
                 return "text-gray-600";
         }
@@ -224,7 +254,7 @@ export default function Dashboard() {
         <>
             {/* Navbar */}
             <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                <div className="flex h-16 justify-between">
+                <div className="flex h-16 justify-between items-center border-b">
                     <div className="flex">
                         <div className="flex flex-shrink-0 items-center">
                             <Sheet
@@ -242,20 +272,50 @@ export default function Dashboard() {
                                         {userInputs.map((input) => (
                                             <div
                                                 key={input.id}
-                                                className="mb-2 py-2 border-b truncate hover:bg-gray-50 hover:rounded-sm"
-                                                onClick={() =>
-                                                    fetchUserInputDetails(
-                                                        input.id
-                                                    )
-                                                }
+                                                className="flex justify-between mb-2 py-2 border-b hover:bg-gray-50 hover:rounded-sm"
                                             >
-                                                {input.inputText}
+                                                <span
+                                                    className="truncate w-72"
+                                                    onClick={() =>
+                                                        fetchUserInputDetails(
+                                                            input.id
+                                                        )
+                                                    }
+                                                >
+                                                    {input.inputText}
+                                                </span>
+                                                <TrashIcon
+                                                    className="h-6 w-6 text-red-500 hover:bg-gray-100 rounded-sm cursor-pointer"
+                                                    onClick={() =>
+                                                        handleDeleteInput(
+                                                            input.id
+                                                        )
+                                                    }
+                                                />
                                             </div>
                                         ))}
                                     </SheetHeader>
                                 </SheetContent>
                             </Sheet>
+                            <Link href="/dashboard">
+                                <Image
+                                    className="ml-2"
+                                    src={Logo}
+                                    alt=""
+                                    width={150}
+                                    height="auto"
+                                />
+                            </Link>
                         </div>
+                    </div>
+                    <div>
+                        <Link href="/dashboard">
+                            <Button variant="link">Home</Button>
+                        </Link>
+
+                        <Link href="/stats">
+                            <Button variant="link">Stats</Button>
+                        </Link>
                     </div>
                     <div className="ml-6 flex items-center">
                         <UserButton afterSignOutUrl="/" />
@@ -299,8 +359,12 @@ export default function Dashboard() {
                                     </FormItem>
                                 )}
                             />
-                            <Button className="w-full" type="submit">
-                                Submit
+                            <Button
+                                className="w-full"
+                                type="submit"
+                                disabled={isLoading}
+                            >
+                                {isLoading ? "Submitting..." : "Submit"}
                             </Button>
                         </form>
                     </Form>
