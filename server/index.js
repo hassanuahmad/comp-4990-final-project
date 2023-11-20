@@ -3,7 +3,7 @@ const cors = require("cors");
 require("dotenv").config();
 const app = express();
 const port = 3001;
-const sql = require ('mssql');
+const sql = require("mssql");
 
 // Configurations
 app.use(cors());
@@ -36,7 +36,7 @@ const config = {
     database: process.env.DB_NAME,
 
     authentication: {
-        type: 'default',
+        type: "default",
     },
     options: {
         encrypt: true,
@@ -47,9 +47,9 @@ const config = {
 async function checkDatabaseConnection() {
     try {
         await sql.connect(config);
-        console.log('Database connected successfully');
+        console.log("Database connected successfully");
     } catch (error) {
-        console.error('Error connecting to the database:', error);
+        console.error("Error connecting to the database:", error);
     }
 }
 
@@ -57,19 +57,18 @@ async function checkDatabaseConnection() {
 checkDatabaseConnection();
 
 // Routes
-app.get('/', (req, res) => {
-    res.render('index');
-  });
-  
-  app.post("/submit", async (req, res) => {
+app.get("/", (req, res) => {
+    res.render("index");
+});
+
+app.post("/submit", async (req, res) => {
     try {
         const userId = req.body.userId;
-        console.log("User ID:", userId);
         const userInput = req.body.userInput;
         const userInputEncoded = encodeURIComponent(userInput);
 
         // Insert UserInput into the database
-        const inputID = await insertUserInput(userInput);
+        const inputID = await insertUserInput(userInput, userId);
 
         if (inputID) {
             // Perform NLP analysis
@@ -77,18 +76,23 @@ app.get('/', (req, res) => {
 
             if (analysisResults) {
                 const nlpResult = JSON.stringify(analysisResults);
-                //console.log('NLP analysis completed:', nlpResult);
 
                 // Insert NLPResponse into the database
-                const responseID = await insertNLPResponse(inputID, nlpResult, userId);
+                const responseID = await insertNLPResponse(
+                    inputID,
+                    nlpResult,
+                    userId
+                );
 
                 if (responseID) {
                     // Insert emotion data into DocumentEmotion table
-                    const emotionData = analysisResults.result.emotion.document.emotion;
+                    const emotionData =
+                        analysisResults.result.emotion.document.emotion;
                     await insertEmotionData(responseID, emotionData);
 
                     // Insert sentiment data into DocumentSentiment table
-                    const sentimentData = analysisResults.result.sentiment.document;
+                    const sentimentData =
+                        analysisResults.result.sentiment.document;
                     await insertSentimentData(responseID, sentimentData);
 
                     // Insert keyword analysis into KeywordAnalysis table
@@ -97,8 +101,12 @@ app.get('/', (req, res) => {
 
                     res.json({ inputID, analysisResults });
                 } else {
-                    console.error("An error occurred during NLP response insertion.");
-                    res.status(500).send("An error occurred during NLP response insertion.");
+                    console.error(
+                        "An error occurred during NLP response insertion."
+                    );
+                    res.status(500).send(
+                        "An error occurred during NLP response insertion."
+                    );
                 }
             } else {
                 console.error("An error occurred NLP analysis.");
@@ -106,7 +114,9 @@ app.get('/', (req, res) => {
             }
         } else {
             console.error("An error occurred during UserInput insertion.");
-            res.status(500).send("An error occurred during UserInput insertion.");
+            res.status(500).send(
+                "An error occurred during UserInput insertion."
+            );
         }
     } catch (error) {
         console.error("Unhandled error:", error);
@@ -115,15 +125,19 @@ app.get('/', (req, res) => {
 });
 
 // INSERTION INTO UserInput Table
-async function insertUserInput(userInput) {
+async function insertUserInput(userInput, userId) {
+    // Include userId as a parameter
     try {
         const sqlQuery = `
-            INSERT INTO dbo.UserInput (inputText, timestamp)
+            INSERT INTO dbo.UserInput (inputText, userId, timestamp)
             OUTPUT INSERTED.id
-            VALUES (@inputText, GETDATE());
+            VALUES (@inputText, @userId, GETDATE());
         `;
 
-        const sqlParameters = [{ name: 'inputText', type: sql.NVarChar, value: userInput }];
+        const sqlParameters = [
+            { name: "inputText", type: sql.NVarChar, value: userInput },
+            { name: "userId", type: sql.NVarChar, value: userId },
+        ];
         const request = new sql.Request();
 
         sqlParameters.forEach((param) => {
@@ -131,42 +145,46 @@ async function insertUserInput(userInput) {
         });
 
         const result = await request.query(sqlQuery);
-        const insertedId = result.recordset.length > 0 ? result.recordset[0].id : null;
-        
+        const insertedId =
+            result.recordset.length > 0 ? result.recordset[0].id : null;
+
         if (insertedId) {
-            console.log('User input inserted successfully with ID:', insertedId);
+            console.log(
+                "User input inserted successfully with ID:",
+                insertedId
+            );
         } else {
-            console.error('Error inserting user input into the database');
+            console.error("Error inserting user input into the database");
         }
 
         return insertedId;
     } catch (error) {
-        console.error('Error inserting user input:', error);
+        console.error("Error inserting user input:", error);
         throw error;
     }
 }
+
 //PERFORM NLP ANALYSIS
 async function performNLPAnalysis(userInputEncoded) {
     const analyzeParams = {
         text: userInputEncoded,
         features: {
-            emotion: { 
-                document: true 
+            emotion: {
+                document: true,
             },
-            sentiment: { 
-                document: true 
+            sentiment: {
+                document: true,
             },
-            keywords: { 
-                emotion: true, 
-                sentiment: true, 
-                limit: 10 
+            keywords: {
+                emotion: true,
+                sentiment: true,
+                limit: 25,
             },
         },
     };
 
     return await naturalLanguageUnderstanding.analyze(analyzeParams);
 }
-
 
 // INSERTION INTO NPResponse Table
 async function insertNLPResponse(inputID, nlpResult, userId) {
@@ -178,9 +196,13 @@ async function insertNLPResponse(inputID, nlpResult, userId) {
         `;
 
         const nlpParameters = [
-            { name: 'userInputID', type: sql.Int, value: inputID },
-            { name: 'nlpResult', type: sql.NVarChar, value: nlpResult },
-            { name: 'userId', type: sql.NVarChar(200), value: userId.toString() },
+            { name: "userInputID", type: sql.Int, value: inputID },
+            { name: "nlpResult", type: sql.NVarChar, value: nlpResult },
+            {
+                name: "userId",
+                type: sql.NVarChar(200),
+                value: userId.toString(),
+            },
         ];
 
         const nlpRequest = new sql.Request();
@@ -196,19 +218,20 @@ async function insertNLPResponse(inputID, nlpResult, userId) {
         // Check if the insertion was successful
         if (result.recordset.length > 0) {
             const responseID = result.recordset[0].ResponseID;
-            console.log('NLP response inserted successfully with ID:', responseID);
+            console.log(
+                "NLP response inserted successfully with ID:",
+                responseID
+            );
             return responseID;
         } else {
-            console.error('Failed to get NLP response ID after insertion.');
+            console.error("Failed to get NLP response ID after insertion.");
             return null;
         }
-
     } catch (error) {
-        console.error('Error inserting NLP response:', error);
+        console.error("Error inserting NLP response:", error);
         throw error;
     }
 }
-
 
 // INSERTION INTO DocumentEmotion Table
 async function insertEmotionData(responseID, emotionData) {
@@ -219,12 +242,12 @@ async function insertEmotionData(responseID, emotionData) {
         `;
 
         const emotionParameters = [
-            { name: 'Sadness', type: sql.Float, value: emotionData.sadness },
-            { name: 'Joy', type: sql.Float, value: emotionData.joy },
-            { name: 'Fear', type: sql.Float, value: emotionData.fear },
-            { name: 'Disgust', type: sql.Float, value: emotionData.disgust },
-            { name: 'Anger', type: sql.Float, value: emotionData.anger },
-            { name: 'ResponseID', type: sql.Int, value: responseID },
+            { name: "Sadness", type: sql.Float, value: emotionData.sadness },
+            { name: "Joy", type: sql.Float, value: emotionData.joy },
+            { name: "Fear", type: sql.Float, value: emotionData.fear },
+            { name: "Disgust", type: sql.Float, value: emotionData.disgust },
+            { name: "Anger", type: sql.Float, value: emotionData.anger },
+            { name: "ResponseID", type: sql.Int, value: responseID },
         ];
 
         const emotionRequest = new sql.Request();
@@ -234,9 +257,9 @@ async function insertEmotionData(responseID, emotionData) {
         });
 
         await emotionRequest.query(insertEmotionQuery);
-        console.log('Emotion data inserted successfully');
+        console.log("Emotion data inserted successfully");
     } catch (error) {
-        console.error('Error inserting emotion data:', error);
+        console.error("Error inserting emotion data:", error);
         throw error;
     }
 }
@@ -250,9 +273,9 @@ async function insertSentimentData(responseID, sentimentData) {
         `;
 
         const sentimentParameters = [
-            { name: 'score', type: sql.Float, value: sentimentData.score },
-            { name: 'label', type: sql.NVarChar, value: sentimentData.label },
-            { name: 'responseID', type: sql.Int, value: responseID },
+            { name: "score", type: sql.Float, value: sentimentData.score },
+            { name: "label", type: sql.NVarChar, value: sentimentData.label },
+            { name: "responseID", type: sql.Int, value: responseID },
         ];
 
         const sentimentRequest = new sql.Request();
@@ -262,9 +285,9 @@ async function insertSentimentData(responseID, sentimentData) {
         });
 
         await sentimentRequest.query(insertSentimentQuery);
-        console.log('Sentiment data inserted successfully');
+        console.log("Sentiment data inserted successfully");
     } catch (error) {
-        console.error('Error inserting sentiment data:', error);
+        console.error("Error inserting sentiment data:", error);
         throw error;
     }
 }
@@ -281,17 +304,49 @@ async function insertKeywordAnalysis(responseID, keywords) {
 
         for (const keyword of keywords) {
             const keywordParameters = [
-                { name: 'Text', type: sql.NVarChar, value: keyword.text },
-                { name: 'SentimentScore', type: sql.Float, value: keyword.sentiment.score },
-                { name: 'SentimentLabel', type: sql.NVarChar, value: keyword.sentiment.label },
-                { name: 'Relevance', type: sql.Float, value: keyword.relevance },
-                { name: 'Sadness', type: sql.Float, value: keyword.emotion ? keyword.emotion.sadness : null },
-                { name: 'Joy', type: sql.Float, value: keyword.emotion ? keyword.emotion.joy : null },
-                { name: 'Fear', type: sql.Float, value: keyword.emotion ? keyword.emotion.fear : null },
-                { name: 'Disgust', type: sql.Float, value: keyword.emotion ? keyword.emotion.disgust : null },
-                { name: 'Anger', type: sql.Float, value: keyword.emotion ? keyword.emotion.anger : null },
-                { name: 'Count', type: sql.Int, value: keyword.count },
-                { name: 'ResponseID', type: sql.Int, value: responseID },
+                { name: "Text", type: sql.NVarChar, value: keyword.text },
+                {
+                    name: "SentimentScore",
+                    type: sql.Float,
+                    value: keyword.sentiment.score,
+                },
+                {
+                    name: "SentimentLabel",
+                    type: sql.NVarChar,
+                    value: keyword.sentiment.label,
+                },
+                {
+                    name: "Relevance",
+                    type: sql.Float,
+                    value: keyword.relevance,
+                },
+                {
+                    name: "Sadness",
+                    type: sql.Float,
+                    value: keyword.emotion ? keyword.emotion.sadness : null,
+                },
+                {
+                    name: "Joy",
+                    type: sql.Float,
+                    value: keyword.emotion ? keyword.emotion.joy : null,
+                },
+                {
+                    name: "Fear",
+                    type: sql.Float,
+                    value: keyword.emotion ? keyword.emotion.fear : null,
+                },
+                {
+                    name: "Disgust",
+                    type: sql.Float,
+                    value: keyword.emotion ? keyword.emotion.disgust : null,
+                },
+                {
+                    name: "Anger",
+                    type: sql.Float,
+                    value: keyword.emotion ? keyword.emotion.anger : null,
+                },
+                { name: "Count", type: sql.Int, value: keyword.count },
+                { name: "ResponseID", type: sql.Int, value: responseID },
             ];
 
             keywordRequest.parameters = []; // Reset parameters array
@@ -303,14 +358,65 @@ async function insertKeywordAnalysis(responseID, keywords) {
             await keywordRequest.query(insertKeywordAnalysisQuery);
         }
 
-        console.log('Keyword analysis inserted successfully');
+        console.log("Keyword analysis inserted successfully");
     } catch (error) {
-        console.error('Error inserting keyword analysis:', error);
+        console.error("Error inserting keyword analysis:", error);
         throw error;
     }
 }
 
+// GET all user inputs
+// GET all user inputs for a specific user
+app.get("/user-inputs/:userId", async (req, res) => {
+    const userId = req.params.userId;
 
-  app.listen(port, () => {
+    try {
+        const sqlQuery = `
+            SELECT * FROM UserInput
+            WHERE userId = @userId;
+        `;
+
+        const request = new sql.Request();
+        request.input("userId", sql.NVarChar, userId);
+
+        const result = await request.query(sqlQuery);
+        res.json(result.recordset);
+    } catch (error) {
+        console.error("Error fetching user inputs for user:", error);
+        res.status(500).send("Error fetching user inputs for user.");
+    }
+});
+
+// GET details for a specific user input
+app.get("/user-input/:id", async (req, res) => {
+    const inputID = req.params.id;
+
+    try {
+        // Updated SQL query to perform a join
+        const sqlQuery = `
+            SELECT NLPResponse.*, UserInput.inputText 
+            FROM NLPResponse 
+            JOIN UserInput ON NLPResponse.UserInputID = UserInput.id
+            WHERE NLPResponse.UserInputID = @inputID;
+        `;
+
+        const request = new sql.Request();
+        request.input("inputID", sql.Int, inputID);
+
+        const result = await request.query(sqlQuery);
+
+        // Check if any data is returned
+        if (result.recordset.length > 0) {
+            res.json(result.recordset[0]);
+        } else {
+            res.status(404).send("No data found for the given input ID.");
+        }
+    } catch (error) {
+        console.error("Error fetching input details:", error);
+        res.status(500).send("Error fetching input details.");
+    }
+});
+
+app.listen(port, () => {
     console.log(`Server running at http://localhost:${port}`);
 });
