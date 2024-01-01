@@ -1,7 +1,7 @@
 
 # COMP-4990 Final Project
 
-This repository contains the source code for the University of Windsor Computer 
+This application leverages IBM Watson's NLP technology to offer sentiment and emotion analysis of user-entered text. Users can authenticate, submit text, and receive immediate analytical feedback. Additionally, the app provides a statistical overview of sentiment and emotion trends over selected timeframes, enhancing understanding of textual expressions.
 
 ## Tech Stack
 
